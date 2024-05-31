@@ -26,27 +26,47 @@ namespace Expressions.Task3.E3SQueryProvider.Services
 
         #region public methods
 
-        public IEnumerable<T> SearchFts<T>(string query, int start = 0, int limit = 10) where T : BaseE3SEntity
+        public IEnumerable<T> SearchFts<T>(string query, int start = 0, int limit = 0) where T : BaseE3SEntity
         {
             var requestGenerator = new FtsRequestGenerator(_baseAddress);
+
             Uri request = requestGenerator.GenerateRequestUrl<T>(query, start, limit);
+
             string resultString = _httpClient.GetStringAsync(request).Result;
+
             return JsonConvert.DeserializeObject<FtsResponse<T>>(resultString).Items.Select(t => t.Data);
         }
 
-        public IEnumerable SearchFts(Type type, string query, int start = 0, int limit = 10)
+        public IEnumerable SearchFts(Type type, string query, int start = 0, int limit = 0)
         {
             Type finalType = typeof(FtsResponse<>).MakeGenericType(type);
-            var items = finalType.GetProperty("Items");
+            if (finalType == null)
+            {
+                throw new ArgumentNullException(nameof(finalType));
+            }
+            var items = finalType.GetProperty("items");
+            if (items == null)
+            {
+                throw new ArgumentNullException(nameof(items));
+            }
+
             var requestGenerator = new FtsRequestGenerator(_baseAddress);
             Uri request = requestGenerator.GenerateRequestUrl(type, query, start, limit);
+
             string resultString = _httpClient.GetStringAsync(request).Result;
+
             object result = JsonConvert.DeserializeObject(resultString, finalType);
+
             var list = Activator.CreateInstance(typeof(List<>).MakeGenericType(type)) as IList;
 
             foreach (object item in (IEnumerable)items.GetValue(result))
             {
-                var data = item.GetType().GetProperty("Data");
+                var data = item.GetType().GetProperty("data");
+                if (data == null)
+                {
+                    throw new ArgumentNullException(nameof(data));
+                }
+
                 list.Add(data.GetValue(item));
             }
 
